@@ -10,7 +10,7 @@ var thisPlayerID;
 console.log('Server Has Started');
 
 var dealCardsOBJ;
-var noOfplayers = 5;
+var noOfplayers = 2;
 var initialPlayerCount = noOfplayers;
 var tempRaisedIndex = noOfplayers;
 var thisPlayer;// = new Player();
