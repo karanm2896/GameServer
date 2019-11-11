@@ -9,6 +9,7 @@ let sockets = [];
 var thisPlayerID;
 console.log('Server Has Started');
 console.log(process.env.PORT);
+console.log(io);
 var dealCardsOBJ;
 var noOfplayers = 2;
 var initialPlayerCount = noOfplayers;
