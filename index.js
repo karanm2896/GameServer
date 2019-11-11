@@ -1,4 +1,4 @@
-var io = require('socket.io')(5012);
+var io = require('socket.io')(process.env.PORT || 5012);
 var dealCardsCLASS = require('./GameScripts/DealCards');
 //var deckofcards = require('./GameScripts/DeckOfCards');
 
@@ -8,7 +8,6 @@ var players = [];
 let sockets = [];
 var thisPlayerID;
 console.log('Server Has Started');
-console.log(io);
 console.log(process.env.PORT);
 var dealCardsOBJ;
 var noOfplayers = 2;
