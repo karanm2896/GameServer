@@ -1,17 +1,17 @@
-var io = require('socket.io')(process.env.PORT || 5012);
+module.exports = function (portnum){
+
+var io = require('socket.io')(process.env.PORT || portnum);
 var dealCardsCLASS = require('./GameScripts/DealCards');
 //var deckofcards = require('./GameScripts/DeckOfCards');
 
-var check = process.env.PORT || 5012;
 var Player = require('./Player');
 
 var players = [];
 let sockets = [];
 var thisPlayerID;
 console.log('Server Has Started');
-console.log(process.env.PORT);
-console.log(check);
 var dealCardsOBJ;
+
 var noOfplayers = 2;
 var initialPlayerCount = noOfplayers;
 var tempRaisedIndex = noOfplayers;
@@ -24,7 +24,7 @@ let totalPlayer = 0;
 const MAX_WAITING = 1000;
 let counter = 0;
 let currentIndex = 0;
-let dealer = -1;
+let dealer = 0;
 var isGameCompleted = false, isRoundCompleted = false;
 let startIndex = 0;
 let smallBlindBid = 25, bigBlindBid = 50;
@@ -35,27 +35,39 @@ var boardCards = [];
 //var noOfplayers = 2;
 var count = 0;
 let totalBid = 0, tempBetValue = 0, currentRaiseValue = 0, callValue = 0;
-var timer = 15;
-let isCheck = false, isCall = false;
+var timer = 60;
+let isCheck = false, isCall = false, isfirstTime = false, isfirstTimeDealer = false;
 let allPot = []; let PotDistribution = [], indexforPot = 0;
-let isAllInSet = false;
-let roundPots = [0, 0, 0, 0];
+let isAllInSet = false, roundPots = [0, 0, 0, 0];
+let currentTempIndex = 0, isAllIn = false;
+//-------------------------------------------//
+let lowestAmountPlayer = 10000, lastRemovedPlayerAmount = 0, foldCount = 0;
+tempPlayers = [];
+playersDisconnected = [];
+waitingPlayers = [];
+isGameRunning = false;
+// allpot -- values // potDistribution -- index of player for each pot array of array 
+// indexforpot -- To add values to potDistribution
 
 function next_turn() {
 
-    console.log(player_Blind[_turn].isCardFold);
+    console.log("Current Raise Value  " + currentRaiseValue + "temp bet values " + tempBetValue);
+
     if (player_Blind[_turn].isCardFold == false) {
         ResetTurn();
-        if (currentRaiseValue == 0)
-            totalBid += tempBetValue;
-        else
-            totalBid += currentRaiseValue;
-       console.log('total biddd'+ totalBid);
+        console.log('--------------total biddd' + totalBid);
         assignCallValue();
     }
+   
     if (player_Blind[_turn].isCardFold == true || (player_Blind[_turn].chips == 0)) {
+
+        if (_turn != 0)
+            currentTempIndex = _turn - 1;
+        else
+            currentTempIndex = player_Blind.length - 1;
         ResetTurn();
         MoveTurnonFold();
+
     }
 
     console.log(_turn);
@@ -69,83 +81,91 @@ function next_turn() {
 
 function MoveTurnonFold() {
     while (player_Blind[_turn].isCardFold == true || player_Blind[_turn].chips == 0) {
+        console.log("compare index " + currentTempIndex + "  " + _turn);
         _turn++;
+
+        if (_turn == player_Blind.length)
+            _turn = 0;
+
+        console.log("check index " + currentTempIndex + "  " + _turn);
+        if (currentTempIndex == _turn) {
+            io.sockets.emit("deactivatebuttons");
+            while (roundNumber <= 4) {
+                roundNumber++;
+                io.emit('RoundFINISH', { roundNo: roundNumber });
+                checkLastRound(roundNumber, sockets[_turn]);
+            }
+            console.log("all other players are either fold or all - in ");
+        }
+        else {
+            console.log("Game continue");
+        }
     }
 }//MoveTurnonFold
 
 function ResetTurn() {
     sockets[_turn].emit('deactivatebuttons');
+    console.log(currentTempIndex + " Temp index set");
     _turn++;
     if (_turn == player_Blind.length)
         _turn = 0;
+
+
 }//ResetTurn
 
+function JsonConvertor(data, valuname) {
+    var jsonObject = JSON.stringify(data);
+    var jObje = JSON.parse(jsonObject);
+    return jObje[valuname];
+}//JsonConvertor
 
 function assignCallValue() {
-    // if (player_Blind[_turn].isCardFold == true || (player_Blind[_turn].chips == 0)) {
-    //     console.log("Fold or All-IN");
-    //     ResetTurn();
-    //     MoveTurnonFold();
-    //     }
-    // else {
         if (player_Blind[_turn].betPoints > 0)
-            callValue = Math.abs(currentRaiseValue - player_Blind[_turn].betPoints);
+        callValue = Math.abs(currentRaiseValue - player_Blind[_turn].betPoints);
+    else {
+        if (isRoundCompleted == true) {
+            isRoundCompleted = false;
+            tempBetValue = 0;
+            callValue = 0;
+        }
         else {
-            if (isRoundCompleted == true) {
-                isRoundCompleted = false;
-                tempBetValue = 0;
-                callValue = 0;
-            }
-            else
-                callValue = currentRaiseValue;
-    
-}
+            callValue = currentRaiseValue;
+        }
+
+    }
+   
     console.log(player_Blind[_turn].betPoints + " Call value is   " + callValue);
 }//assignCallValue
 
 function checkTotalChips() {
+
     if (callValue > player_Blind[_turn].chips) {
-    io.sockets.emit('AssignCallValue', { cv: player_Blind[_turn].chips });
+        io.sockets.emit('AssignCallValue', { cv: player_Blind[_turn].chips });
     }
     else {
-    io.sockets.emit('AssignCallValue', { cv: callValue });
+        io.sockets.emit('AssignCallValue', { cv: callValue });
     }
 }//checkTotalChips
 
 function assignSmallBigBlindAndCurrentPlyer() {
-    //let players = [];
+    dealer = GetNextValidPlayerIndex(dealer);
+    smallBlind = GetNextValidPlayerIndex(dealer);
+    bigBlind = GetNextValidPlayerIndex(smallBlind);
+    startIndex = GetNextValidPlayerIndex(bigBlind);
 
-    let tempSmall = player_Blind[smallBlind].chips;
-    let tempBig = player_Blind[bigBlind].chips;
-
-    console.log(smallBlindBid + "  " + bigBlindBid);
-    // if (isGameCompleted == true) {
-    //     isGameCompleted = false;
-
-    dealer += 1;
-    if (dealer >= player_Blind.length) {
-        dealer = 0;
+    if (dealer == smallBlind) {
+        let error = "Minimum two player required";
+        io.sockets.emit("totalBid", { tb: error });
+        console.log("Minimum two player required");
     }
-    smallBlind = dealer + 1;
-    if (smallBlind >= player_Blind.length) {
-        smallBlind = 0;
-    }
-    console.log(player_Blind.length + "  " + smallBlind + " " + bigBlind);
-    bigBlind = smallBlind + 1;
-    if (bigBlind >= player_Blind.length) {
-        bigBlind = 0;
-    }
-    startIndex = bigBlind + 1;
-    if (startIndex >= player_Blind.length) {
-        startIndex = 0;
-    }
-    // startIndex;
+    
     _turn = startIndex;
-    tempSmall -= smallBlindBid;
+   
     player_Blind[smallBlind].chips -= smallBlindBid;
-    tempBig -= bigBlindBid;
+    player_Blind[smallBlind].totalBetPoints = smallBlindBid;
+   
     player_Blind[bigBlind].chips -= bigBlindBid;
-
+    player_Blind[bigBlind].totalBetPoints = bigBlindBid;
     player_Blind[smallBlind].betPoints = smallBlindBid;
     player_Blind[bigBlind].betPoints = bigBlindBid;
     currentRaiseValue = bigBlindBid;
@@ -153,29 +173,315 @@ function assignSmallBigBlindAndCurrentPlyer() {
     io.sockets.emit("InIt", { sb: smallBlind, bb: bigBlind, si: startIndex });
     for (let i = 0; i < player_Blind.length; i++) {
         io.sockets.emit("AssignTotalValues", { tc: player_Blind[i].chips, tp: player_Blind.length });
-        //console.log(player_Blind[i].chips);
+        
     }
     totalBid = smallBlindBid + bigBlindBid;
     isCall = true;
     isCheck = false;
     io.sockets.emit("SetCallCheckButton", { call: isCall, check: isCheck });
-    io.sockets.emit("setPlayerBetPoints", { sbbp: smallBlindBid, bbbp: bigBlindBid,cv: callValue });
-    io.sockets.emit("RemoveSmallbigBlindAmount", { sbb: player_Blind[smallBlind].chips, bbb: player_Blind[bigBlind].chips, totalPot: totalBid  });
+    io.sockets.emit("setPlayerBetPoints", { sbbp: smallBlindBid, bbbp: bigBlindBid, cv: callValue });
+    io.sockets.emit("RemoveSmallbigBlindAmount", { sbb: player_Blind[smallBlind].chips, bbb: player_Blind[bigBlind].chips, totalPot: totalBid });
+
+
     counter++;
-    //console.log(players[bigBlind].chips + "  " + players[smallBlind].chips + "Small blind Index is " + smallBlind + "  Big blind Index is" + bigBlind + " startIndex is" + startIndex);
 }//assignSmallBigBlindAndCurrentPlyer
 
+function GetNextValidPlayerIndex(index) {
+    let nextIndex = index + 1;
+    nextIndex = nextIndex >= player_Blind.length ? 0 : nextIndex;
+    while (player_Blind[nextIndex].chips == 0) {
+        nextIndex++;
+    }
 
-// function ShowNumberOfCards(displayNoOFCards) {
-//     console.log(displayNoOFCards);
-//     io.sockets.emit("ShowCards", { r: displayNoOFCards });
-// }
+    return nextIndex;
+}//GetNextValidPlayerIndex
+
+
+
+function checkAllIn() {
+    if (player_Blind[_turn].chips <= 0) {
+        player_Blind[_turn].isAllIn = true;
+        isAllIn = true;
+        isAllInSet = true;
+        console.log("chck all in true  " + player_Blind[_turn].chips + ' ---------------- ' + tempBetValue);
+    }
+}//checkAllIn
+
+function CalculateAllIn() {
+
+    tempPlayers = new Array(player_Blind.length);
+    tempPlayers = player_Blind.slice();
+    tempPlayers = Array.from(player_Blind);
+    console.log(isAllInSet + ' true or fals');
+    if (isAllInSet) {
+        let potValues = 0, lastLowestAmount = 0, totalPotPlayers = 0;
+        sortPlayer_blindChips = [];
+        console.log(tempPlayers[0].totalBetPoints + " 0 bet poitns");
+        
+        for (let i = 0; i < tempPlayers.length; i++) {
+            if (!tempPlayers[i].isCardFold && tempPlayers[i].totalBetPoints > 0) {
+
+                console.log(i + ' after push side pot index' + indexforPot);
+                PotDistribution[indexforPot].push(i);
+                console.log(tempPlayers[i].totalBetPoints + "    curernt bet pooints   ");
+                if (tempPlayers[i].totalBetPoints < lowestAmountPlayer) {
+                    console.log(tempPlayers[i].totalBetPoints + 'assing this value to lowest player amount');
+                    lowestAmountPlayer = tempPlayers[i].totalBetPoints;
+                    console.log(lowestAmountPlayer + "lowest amount is ");
+                }
+                else {
+                    console.log(lowestAmountPlayer + "lowest amount playes value is high");
+                }
+            }
+       
+        }
+        let tempPot = (lowestAmountPlayer - lastRemovedPlayerAmount) * (tempPlayers.length - foldCount);
+        console.log('temp pot is  ' + tempPot + ' -- toatal bid ' + totalBid);
+
+        if (foldCount > 0) {
+            let diff = Math.abs(totalBid - tempPot);
+            allPot.push(tempPot + diff);
+        }
+        else {
+            allPot.push(tempPot);
+        }
+
+        console.log("final pot values is   " + allPot[0]);
+        lastRemovedPlayerAmount = lowestAmountPlayer;
+
+        //Remove all lowest value players
+        let playersToRemove = [];
+
+        for (let i = 0; i < tempPlayers.length; i++) {
+            console.log(tempPlayers[i].totalBetPoints + '-----' + lowestAmountPlayer)
+            if (tempPlayers[i].totalBetPoints == lowestAmountPlayer && !tempPlayers[i].isCardFold) {
+                playersToRemove.push(i);
+                console.log('please add this valuye to removed index    ' + i);
+                tempPlayers[i].totalBetPoints -= lowestAmountPlayer;
+            }
+            else if (tempPlayers[i].totalBetPoints >= lowestAmountPlayer && !tempPlayers[i].isCardFold) {
+                console.log('remaining players idnex  otherthan All-in   ' + i);
+                tempPlayers[i].totalBetPoints -= lowestAmountPlayer;
+            }
+        }
+
+        console.log(playersToRemove.length + " remove this playersy " + lowestAmountPlayer);
+
+        for (var i = playersToRemove.length - 1; i >= 0; i--) {
+            tempPlayers.splice(playersToRemove[i], 1);
+        }
+
+        console.log(allPot[0] + "pot valeus and Players left in temp array " + tempPlayers.length);
+        indexforPot++;
+        PotDistribution[indexforPot] = [];
+
+       
+        console.log(" side pot values");
+       
+        isAllInSet = false;
+    }
+    else {
+        console.log(roundNumber + " Round");
+        if (roundNumber == 4) {
+            let temptotalbid = 0;
+            let foldIndex = [];
+           
+            for (let i = 0; i < tempPlayers.length; i++) {
+                if (!tempPlayers[i].isCardFold && tempPlayers[i].totalBetPoints > 0) {
+
+                    if (PotDistribution[i] == null || PotDistribution[i].length == 0)
+                        PotDistribution[i] = [];
+
+                    PotDistribution[indexforPot].push(i);
+                    temptotalbid += tempPlayers[i].totalBetPoints;
+                }
+               
+            }
+            console.log("i dont know temp total bid   " + temptotalbid + " --- " + PotDistribution[0]);
+            if (foldCount > 0) {
+                let diff = Math.abs(totalBid - temptotalbid);
+                allPot.push(temptotalbid + diff);
+            }
+            else {
+                allPot.push(temptotalbid);
+            }
+            console.log(allPot + ' why two times');
+          
+            indexforPot++;
+
+        }
+    }
+}//CalculateAllIn
+
+function checkLastRound(roundNumber, socket) {
+  
+    console.log("check last or not " + counter + " Rounde" + roundNumber + "  -------" + count);
+    if (roundNumber == 4) {
+        counter = 0;
+        currentRaiseValue = 0;
+        count = noOfplayers;
+        for (let i = 0; i < noOfplayers; i++) {
+            if (player_Blind[i].chips == 0) {
+                count--;
+            }
+        }
+        console.log('count players on ROund finish ' + count);
+       
+        isCall = false;
+        isCheck = true;
+        io.sockets.emit("SetCallCheckButton", { call: isCall, check: isCheck });
+
+        for (let j = 0; j < player_Blind.length; j++) {
+            roundPots[roundNumber] += player_Blind[j].betPoints;
+            player_Blind[j].betPoints = 0;
+        }
+        for (let i = 0; i < allPot.length; i++) {
+            console.log(allPot.length + " length " + PotDistribution[i].length + "  " + PotDistribution[i]);
+            dealCardsOBJ.Newevaluate(PotDistribution[i]);
+            var winn = dealCardsCLASS.highestHandindex;
+            console.log('Highest Index ' + winn);
+            player_Blind[PotDistribution[i][winn - 1]].chips += allPot[i];
+            console.log(player_Blind[PotDistribution[i][winn - 1]].chips + " added amount");
+            io.sockets.emit("WinGame", { winner: PotDistribution[i][winn], addvalue: player_Blind[winn - 1].chips });
+        }
+
+      
+        for (let i = 0; i < allPot.length; i++) {
+            console.log(allPot[i] + " pot devided between this index " + PotDistribution[i]);
+        }
+        isGameCompleted = true;
+        roundNumber = 0;
+        count = noOfplayers;
+        for (let i = 0; i < noOfplayers; i++) {
+            if (player_Blind[i].chips == 0) {
+                count--;
+            }
+        }
+        console.log('count players ' + count);
+
+
+        for (var p_id in players) {
+            players[p_id].isCardFold = false;
+        }
+        io.sockets.emit('NewRound');
+        StartGame(socket);
+                console.log('-----Game Completed------');
+    }
+    if (isGameCompleted == false) {
+        next_turn();
+    }
+}//checkLastRound
+
+function CheckandCallNextTurn(socket) {
+    counter++;
+    isGameCompleted = false;
+    if (player_Blind[_turn].isCardFold == false) {
+        totalBid += tempBetValue;
+        console.log('--------------total biddd' + totalBid);
+    }
+    io.sockets.emit("totalBid", { tb: totalBid });
+    console.log("check round finished or not " + counter + " " + count);
+    if (counter == count) {
+
+              // ---------- Round Completed --------------- //
+        counter = 0;
+        currentRaiseValue = 0;
+
+        isCall = false;
+        isCheck = true;
+        io.sockets.emit("SetCallCheckButton", { call: isCall, check: isCheck });
+
+        for (let j = 0; j < player_Blind.length; j++) {
+            roundPots[roundNumber] += player_Blind[j].betPoints;
+            player_Blind[j].betPoints = 0;
+        }
+        console.log(roundNumber + "round pots valeus " + roundPots[roundNumber]);
+        roundNumber += 1;
+        CalculateAllIn();
+        if (roundNumber == 4) {
+
+            //  if (isAllIn == true) {
+            console.log(allPot.length + '    pots length');
+            for (let i = 0; i < allPot.length; i++) {
+                console.log(allPot.length + " length " + PotDistribution[i].length + "  " + PotDistribution[i]);
+                dealCardsOBJ.Newevaluate(PotDistribution[i]);
+                var winn = dealCardsCLASS.highestHandindex;
+                console.log('Pot Destribution Highest Index ' + winn);
+                // player_Blind[winn - 1].chips += allPot[i];
+                player_Blind[PotDistribution[i][winn - 1]].chips += allPot[i];
+                console.log(player_Blind[PotDistribution[i][winn - 1]].chips + " added CheckandCallNextTurn amount");
+                io.sockets.emit("WinGame", { winner: PotDistribution[i][winn], addvalue: player_Blind[winn - 1].chips });
+            }
+          
+            for (let i = 0; i < allPot.length; i++) {
+                console.log(allPot[i] + " pot devided between this index " + PotDistribution[i]);
+            }
+            indexforPot = 0;
+            isGameCompleted = true;
+            roundNumber = 0;
+            foldCount = 0;
+            
+            
+            console.log('waiting players -------------'+Object.keys(waitingPlayers).length);
+            if(Object.keys(waitingPlayers).length > 0){
+
+                for(var p in waitingPlayers){
+                    player_Blind.push(waitingPlayers[p]);
+                    players[p] = waitingPlayers[p];
+                    //socket.emit('register', { id: p });
+                    noOfplayers++;
+                }
+               
+            }
+            waitingPlayers = [];
+            console.log("waiting players dict --------" + waitingPlayers);
+            count = noOfplayers;
+            console.log("count====="+count + "  noofplayer====" +noOfplayers);
+
+            for (let m = 0; m < player_Blind.length; m++) {
+                player_Blind[m].totalBetPoints = 0;
+            }
+
+            PotDistribution[0].length = 0;
+            allPot.length = 0;
+            for (var p_id in players) {
+                players[p_id].isCardFold = false;
+            }
+            io.sockets.emit('NewRound');
+           // io.sockets.emit('playercount', { c: count });
+            console.log('-----Game Completed------');
+            
+            StartGame(socket);
+        }
+        count = noOfplayers;
+        for (let i = 0; i < noOfplayers; i++) {
+            if (player_Blind[i].chips == 0 || player_Blind[i].isCardFold == true) {
+                count--;
+            }
+        }
+        console.log(counter + " COunter Total player " + count);
+
+    }
+    io.sockets.emit('RoundFINISH', { roundNo: roundNumber });
+    // isCall = false;
+    // isCheck = true;
+    // io.sockets.emit("SetCallCheckButton", { call: isCall, check: isCheck });
+   
+    if (isGameCompleted == false) {
+        next_turn(socket);
+    }
+
+
+}//CheckandCallNextTurn
 
 function StartGame(socket) {
     dealCardsOBJ = new dealCardsCLASS(noOfplayers);
     dealCardsOBJ.Deal();
-    PotDistribution[0] = [0, 1, 2];
-    allPot[0] = 150;
+    //PotDistribution[0] = [0, 1, 2, 3, 4];
+    //allPot[0] = 150;
+    allPot.length = 0;
+    PotDistribution[0] = [];
+    console.log("pot dis " + PotDistribution[0]);
     var i = 0;
     for (var p_id in players) {
 
@@ -194,20 +500,18 @@ function StartGame(socket) {
     if (boardCards.length > 0) {
         boardCards.length = 0;
     }
-
     for (let j = 2; j < 7; j++) {
         boardCards.push(dealCardsOBJ.P_Hand[0][j].VALUE + dealCardsOBJ.P_Hand[0][j].SUIT);
     }
 
-    // console.log(boardCards);
-
     assignSmallBigBlindAndCurrentPlyer();
     sockets[_turn].emit('activatebuttons');
     sockets[_turn].broadcast.emit('deactivatebuttons');
+
     console.log(players);
 
-    socket.emit('BoardCards', { boardCARDS: boardCards });
-    socket.broadcast.emit('BoardCards', { boardCARDS: boardCards });
+    io.sockets.emit('BoardCards', { boardCARDS: boardCards });
+    //socket.broadcast.emit('BoardCards', { boardCARDS: boardCards });
 
     socket.emit('p_count', { pcount: count });
     socket.broadcast.emit('p_count', { pcount: count });
@@ -222,145 +526,35 @@ function StartGame(socket) {
     }
 }//StartGame
 
-function checkAllIn(tempBetValue) {
-    if (player_Blind[_turn].chips <= tempBetValue) {
-    player_Blind[_turn].isAllIn = true;
-    isAllInSet = true;
-    CalculateAllIn();
-        }
-}//checkAllIn
-
-function CalculateAllIn() {
-    let potValues = 0, lastLowestAmount = 0, totalPotPlayers = 0;
-    sortPlayer_blindChips = [];
-    //sortPlayer_blindChips = player_Blind;
-    // sortPlayer_blindChips.sort((a, b) => (a.chips > b.chips) ? 1 : ((b.chips > a.chips) ? -1 : 0));
-    for (let i = 0; i < player_Blind.length; i++) {
-    if (!player_Blind[i].isCardFold && player_Blind[i].chips > 0) {
-    totalPotPlayers++;
-    sortPlayer_blindChips.push(player_Blind[i].totalBetPoints);
-    console.log(" values added to sorted array " + player_Blind[i].chips);
-    //sortPlayer_blindChips = _.sortBy(player_Blind, 'chips');
-    if (PotDistribution[i] == null)
-    PotDistribution[i] = [];
-    PotDistribution[indexforPot].push(i);
-    console.log(" pot player index  " + PotDistribution[i]);
-    }
-    else {
-    console.log('fold and chips 0 indexs are ' + i);
-    }
-    }
-    sortPlayer_blindChips.sort(function (a, b) { return a - b });
-    console.log('sorted Array' + sortPlayer_blindChips);
-    lastLowestAmount = sortPlayer_blindChips[0];
-    potValues = (sortPlayer_blindChips[0] * totalPotPlayers);
-    console.log("First Pot" + potValues);
-    allPot.push(potValues);
-    indexforPot++;
-    isAllInSet = false;
-}//CalculateAllIn
-
-// function compare(a, b) {
-//     if (a.last_nom < b.last_nom) {
-//     return -1;
-//     }
-//     if (a.last_nom > b.last_nom) {
-//     return 1;
-//     }
-//     return 0;
-//     }
-
-function JsonConvertor(data,valuname){
-    var jsonObject = JSON.stringify(data);
-    var jObje = JSON.parse(jsonObject);
-    return jObje[valuname];
-}
-
-function CheckandCallNextTurn(socket) {
-    counter++;
-    isGameCompleted = false;
-    console.log(counter + " COunter Total player " + count);
-    if (counter == count) {
-        // ---------- Round Completed --------------- //
-        counter = 0;
-        currentRaiseValue = 0;
-       
-        console.log(" round Number " + roundNumber);
-        isCall = false;
-        isCheck = true;
-        io.sockets.emit("SetCallCheckButton", { call: isCall, check: isCheck });
-        for (let j = 0; j < player_Blind.length; j++) {
-            roundPots[roundNumber] += player_Blind[j].betPoints;
-            player_Blind[j].betPoints = 0;
-        }
-        console.log("round pots valeus " + roundPots[roundNumber]);
-        roundNumber += 1;
-        if (roundNumber == 4) {
-
-            for (let i = 0; i < 1; i++) {
-                dealCardsOBJ.Newevaluate(PotDistribution[i]);
-            var winn = dealCardsCLASS.highestHandindex;
-
-            //io.sockets.emit("WinGame", { winner: winn });
-            player_Blind[winn - 1].chips += totalBid;
-            io.sockets.emit("WinGame", { winner: winn, addvalue: player_Blind[winn - 1].chips });
-            //socket.broadcast.emit("WinGame", { winner: winn });
-
-            for (let i = 0; i < allPot.length; i++) {
-                console.log(allPot[i] + " pot devided between this index " + PotDistribution[i]);
-                }
-
-            isGameCompleted = true;
-            roundNumber = 0;
-            count = noOfplayers;
-            
-            for (var p_id in players) {
-                players[p_id].isCardFold = false;
-            }
-            io.sockets.emit('NewRound');
-            
-            StartGame(socket);
-            //assignSmallBigBlindAndCurrentPlyer();
-            console.log('-----Game Completed------');
-        }
-
-    }
-}
-    io.sockets.emit('RoundFINISH', { roundNo: roundNumber });
-   
-    if (isGameCompleted == false) {
-        next_turn();
-    }
-
-
-}//CheckandCallNextTurn
-
 io.on('connection', function (socket) {
-    console.log('-------Connection made-------');
+    console.log('-------Connection made------- on Port ' + portnum);
     sockets.push(socket);
-    count = count + 1;
-    socket.emit('playercount', { c: count });
     player = new Player();
     thisPlayerID = player.id;
-
-    player_Blind.push(player);
-    players[thisPlayerID] = player;
-    //sockets[thisPlayerID] = socket;
-    
-    //console.log(count);
-    
+    count = count + 1;
+    socket.emit('playercount', { c: count });
     socket.emit('register', { id: thisPlayerID });
 
-    module.exports.player_Blind = player_Blind;
-    if (count == noOfplayers) {
-        // setInterval(function(){
-        //     io.sockets.emit('timer',{time:timer});
-        //   }, MAX_WAITING);   
-        StartGame(socket);
+    if(isGameRunning){
+        waitingPlayers[thisPlayerID] = player;
+        socket.emit("WaitList");
+    }
+    else{
+        player_Blind.push(player);
+        players[thisPlayerID] = player;
+        module.exports.player_Blind = player_Blind;
+        if (count == noOfplayers) {
+            // setInterval(function () {
+            //     io.sockets.emit('timer', { time: timer });
+            // }, MAX_WAITING);
+            isGameRunning = true;
+            StartGame(socket);
+        }
     }
     
-    socket.on('pass_turn', function () {
 
+   
+    socket.on('pass_turn', function () {
         if (sockets[_turn].id == socket.id) {
             tempBetValue = 0;
             io.sockets.emit("SetButtonNameOnClick", { turn: _turn, buttonName: 'Check' });
@@ -368,19 +562,19 @@ io.on('connection', function (socket) {
         }
     });
 
-    socket.on('buttonClick',function(){
-            sockets[_turn].emit('activatebuttons');
+    socket.on('buttonClick', function () {
+        sockets[_turn].emit('activatebuttons');
     });
 
 
-    socket.on('timerReset',function(data){
-        
+    socket.on('timerReset', function (data) {
+
         var jsonObject = JSON.stringify(data);
         var folderplayerindex = JSON.parse(jsonObject);
         var timerindex = folderplayerindex['Index'];
         console.log();
         io.sockets.emit('timeReset', { ti: timerindex });
-        
+
     });
 
 
@@ -389,13 +583,13 @@ io.on('connection', function (socket) {
             var jsonObject = JSON.stringify(data);
             var folderplayerindex = JSON.parse(jsonObject);
             player_Blind[_turn].isCardFold = true;
-            count--;
+            foldCount++;
+            // count--;
+            //counter--;
             var fpindex = folderplayerindex['Index'];
             io.sockets.emit('fold', { fpi: fpindex });
-           // if(count > 1)
-                next_turn();
-            //else
-               // CheckandCallNextTurn(socket);
+            console.log(counter + '----- check last turn' + count);
+            CheckandCallNextTurn(socket);
         }
     });
 
@@ -406,43 +600,27 @@ io.on('connection', function (socket) {
                 socket.emit("GetTotalPoints", { totalPoints: player_Blind[_turn].chips });
                 console.log(player_Blind[_turn].chips + "  Pls set slider max valu ");
             }
-            else{
+            else
                 socket.emit("PointsNullError");
-            }
-               
         }
-    });
-
-    // socket.on("israised",function(){
-    //     io.sockets.emit('isRaised');
-    // });
+    });//Sets the Raise Slider value 
 
     socket.on("Raise", function (data) {
         if (sockets[_turn] == socket) {
-            //tempRaisedIndex = _turn;
             io.sockets.emit("SetButtonNameOnClick", { turn: _turn, buttonName: 'Raise' });
-            // var jsonObject = JSON.stringify(data);
-            // var jObje = JSON.parse(jsonObject);
-            //tempBetValue = jObje['BetValue'];
-            tempBetValue = JsonConvertor(data,'BetValue');
-            //if (player_Blind[_turn].betPoints > 0)
-
+            tempBetValue = JsonConvertor(data, 'BetValue');
             currentRaiseValue += tempBetValue;
-            checkAllIn(tempBetValue);
-
+            player_Blind[_turn].totalBetPoints += currentRaiseValue;
             console.log("Before" + player_Blind[_turn].chips + "  " + tempBetValue + " " + currentRaiseValue);
-            if (player_Blind[_turn].chips == tempBetValue){
+            if (player_Blind[_turn].chips <= tempBetValue)
                 player_Blind[_turn].chips = 0;
-                // player_Blind[_turn].Allin = true;
-                // CalculateAllin(tempBetValue);
-            }
             else
                 player_Blind[_turn].chips = player_Blind[_turn].chips - currentRaiseValue + player_Blind[_turn].betPoints;
-            console.log(player_Blind[_turn].chips);
-
+            console.log("Player Chips " + player_Blind[_turn].chips);
 
             assignCallValue();
             player_Blind[_turn].betPoints = tempBetValue;
+            checkAllIn();
             let temp = player_Blind[_turn].chips;
             io.sockets.emit("RemoveTotalValue", { totalchips: temp, betPoints: tempBetValue, turn: _turn, cv: callValue });
             //console.log(jObje['BetValue'] + "  Raise Value ");
@@ -456,32 +634,50 @@ io.on('connection', function (socket) {
     });
 
     socket.on("Call", function (data) {
-        
+
         if (sockets[_turn] == socket) {
             io.sockets.emit("SetButtonNameOnClick", { turn: _turn, buttonName: 'Call' });
-            // var jsonObject = JSON.stringify(data);
-            // var jObje = JSON.parse(jsonObject);
-            // tempBetValue = jObje['BetValue'];
-            tempBetValue = JsonConvertor(data,'BetValue');
+            tempBetValue = currentRaiseValue;
+            console.log("call checking--- " + tempBetValue + " " + player_Blind[_turn].chips)
+            if (tempBetValue >= player_Blind[_turn].chips) {
+                tempBetValue = player_Blind[_turn].chips;
+                player_Blind[_turn].chips = 0;
+            }
+            else {
+                tempBetValue = currentRaiseValue - player_Blind[_turn].betPoints;
+                console.log("TEMPBETVALUE " + tempBetValue + " riase" + currentRaiseValue + "   " + player_Blind[_turn].betPoints);
+                player_Blind[_turn].chips = player_Blind[_turn].chips - currentRaiseValue + player_Blind[_turn].betPoints;
+            }
             player_Blind[_turn].totalBetPoints += tempBetValue;
-            checkAllIn(tempBetValue);
-            player_Blind[_turn].chips = player_Blind[_turn].chips - currentRaiseValue + player_Blind[_turn].betPoints;
+            checkAllIn();
             let temp = player_Blind[_turn].chips;
             assignCallValue();
+            player_Blind[_turn].betPoints = tempBetValue;
+            console.log(tempBetValue + '   bet value ');
             io.sockets.emit("RemoveTotalValue", { totalchips: temp, betPoints: tempBetValue, turn: _turn, cv: callValue });
             CheckandCallNextTurn(socket);
         }
     });
 
+ 
 
     socket.on('disconnect', function () {
         console.log('Player has Disconnected');
-        player_Blind.splice(player_Blind.indexOf(socket), 1);
-        count--;
+       count--;
+        //player_Blind.splice(player_Blind.indexOf(socket), 1);
+        players[thisPlayerID].isCardFold = true;
         delete players[thisPlayerID];
-        delete sockets[thisPlayerID];
+        console.log(thisPlayerID + ' is Offline');
+
+        //delete players[thisPlayerID];
+        //delete sockets[thisPlayerID];
+        
+        
     });
 
-
-
 });
+
+};
+
+
+

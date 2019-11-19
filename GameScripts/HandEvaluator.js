@@ -153,7 +153,7 @@ module.exports = class HandEvaluator extends cardImport
         ///3,4,5,6,,,,2->high card
         else if (this.cards[3].MY_VALUE == this.cards[4].MY_VALUE && this.cards[3].MY_VALUE == this.cards[5].MY_VALUE && this.cards[3].MY_VALUE == this.cards[6].MY_VALUE)
         {
-            this.handValue.Total = ards[3].MY_VALUE * 4;
+            this.handValue.Total = cards[3].MY_VALUE * 4;
             this.handValue.HighCard = this.cards[2].MY_VALUE;
             return true;
         }

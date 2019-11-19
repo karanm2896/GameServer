@@ -16,6 +16,7 @@ class Player{
         this.isCardFold = false;
         this.isAllin = false;
         this.totalBetPoints = 0;
+        this.amOnline = false;
     }
 
     get Player_id(){
