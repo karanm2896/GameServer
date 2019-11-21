@@ -249,13 +249,13 @@ module.exports = class HandEvaluator extends cardImport
         switch (this.OnePairForTwoPair())
         {
             case 5:
-                if (this.cards[1].MY_VALUE + 1 == this.cards[2].MY_VALUE &&
+                if (this.cards[0].MY_VALUE + 1 == this.cards[1].MY_VALUE &&
+                    this.cards[1].MY_VALUE + 1 == this.cards[2].MY_VALUE &&
                     this.cards[2].MY_VALUE + 1 == this.cards[3].MY_VALUE &&
-                    this.cards[3].MY_VALUE + 1 == this.cards[4].MY_VALUE &&
-                    this.cards[4].MY_VALUE + 1 == this.cards[5].MY_VALUE)
+                    this.cards[3].MY_VALUE + 1 == this.cards[4].MY_VALUE)
                 {
                     //player with the highest value of the last card wins
-                    this.handValue.Total = this.cards[5].MY_VALUE;
+                    this.handValue.Total = this.cards[4].MY_VALUE;
                     return true;
                 }
                 break;
@@ -263,10 +263,10 @@ module.exports = class HandEvaluator extends cardImport
                 if (this.cards[0].MY_VALUE + 1 == this.cards[1].MY_VALUE &&
                         this.cards[1].MY_VALUE + 1 == this.cards[2].MY_VALUE &&
                         this.cards[2].MY_VALUE + 1 == this.cards[3].MY_VALUE &&
-                        this.cards[3].MY_VALUE + 1 == this.cards[6].MY_VALUE)
+                        this.cards[3].MY_VALUE + 1 == this.cards[4].MY_VALUE)
                 {
                     //player with the highest value of the last card wins
-                    this.handValue.Total = this.cards[6].MY_VALUE;
+                    this.handValue.Total = this.cards[4].MY_VALUE;
                     return true;
                 }
                 break;
@@ -274,21 +274,43 @@ module.exports = class HandEvaluator extends cardImport
                 if (this.cards[0].MY_VALUE + 1 == this.cards[1].MY_VALUE &&
                         this.cards[1].MY_VALUE + 1 == this.cards[2].MY_VALUE &&
                         this.cards[2].MY_VALUE + 1 == this.cards[3].MY_VALUE &&
-                        this.cards[5].MY_VALUE + 1 == this.cards[6].MY_VALUE)
+                        this.cards[3].MY_VALUE + 1 == this.cards[5].MY_VALUE)
                 {
                     //player with the highest value of the last card wins
-                    this.handValue.Total = this.cards[6].MY_VALUE;
+                    this.handValue.Total = this.cards[5].MY_VALUE;
                     return true;
                 }
                 break;
             case 2:
                 if (this.cards[0].MY_VALUE + 1 == this.cards[1].MY_VALUE &&
                         this.cards[1].MY_VALUE + 1 == this.cards[2].MY_VALUE &&
-                        this.cards[4].MY_VALUE + 1 == this.cards[5].MY_VALUE &&
-                        this.cards[5].MY_VALUE + 1 == this.cards[6].MY_VALUE)
+                        this.cards[2].MY_VALUE + 1 == this.cards[4].MY_VALUE &&
+                        this.cards[4].MY_VALUE + 1 == this.cards[5].MY_VALUE)
                 {
                     //player with the highest value of the last card wins
-                    this.handValue.Total = this.cards[6].MY_VALUE;
+                    this.handValue.Total = this.cards[5].MY_VALUE;
+                    return true;
+                }
+                break;
+            case 1:
+                if (this.cards[0].MY_VALUE + 1 == this.cards[1].MY_VALUE &&
+                        this.cards[1].MY_VALUE + 1 == this.cards[3].MY_VALUE &&
+                        this.cards[3].MY_VALUE + 1 == this.cards[4].MY_VALUE &&
+                        this.cards[4].MY_VALUE + 1 == this.cards[5].MY_VALUE)
+                {
+                    //player with the highest value of the last card wins
+                    this.handValue.Total = this.cards[5].MY_VALUE;
+                    return true;
+                }
+                break;
+            case 0:
+                if (this.cards[1].MY_VALUE + 1 == this.cards[2].MY_VALUE &&
+                        this.cards[2].MY_VALUE + 1 == this.cards[3].MY_VALUE &&
+                        this.cards[3].MY_VALUE + 1 == this.cards[4].MY_VALUE &&
+                        this.cards[4].MY_VALUE + 1 == this.cards[5].MY_VALUE)
+                {
+                    //player with the highest value of the last card wins
+                    this.handValue.Total = this.cards[5].MY_VALUE;
                     return true;
                 }
                 break;
@@ -511,6 +533,16 @@ module.exports = class HandEvaluator extends cardImport
         {
 
             return 2;
+        }
+        else if (this.cards[1].MY_VALUE == this.cards[2].MY_VALUE)
+        {
+
+            return 1;
+        }
+        else if (this.cards[0].MY_VALUE == this.cards[1].MY_VALUE)
+        {
+
+            return 0;
         }
 
         return -1;

@@ -171,6 +171,8 @@ module.exports = class DealCards extends deckofcards {
         }
     }
 
+
+
     Newevaluate(PotDistribution) {
 
         var allplayerHandEvaluator = [];
@@ -199,7 +201,8 @@ module.exports = class DealCards extends deckofcards {
 
         winnerIndexes = P.player_Blind;
 
-        playersEvaluatedHand.sort()
+        //playersEvaluatedHand.sort();
+        //playersEvaluatedHand.reverse();
         console.log("Evaluated Hands list   ---   "+ playersEvaluatedHand);
 
         for (let i = 0; i < pot_Distribution.length; i++) {
@@ -234,10 +237,14 @@ module.exports = class DealCards extends deckofcards {
                         highestHandindex = i;
                     }
                     else if (allplayerHandEvaluator[i].HighCard == allplayerHandEvaluator[highestHandindex].HighCard) {
-                        isPotSplit = true;
-                        splitPotWinner[k] = i;
-                        console.log('Draw Hand---Split Pot');
-                        k++;
+
+                        highestHandindex = this.NextHighestCardEvaluate(i,highestHandindex);
+                        if(newHighestIndex == -1){
+                            isPotSplit = true;
+                            splitPotWinner[k] = i;
+                            console.log('Draw Hand---Split Pot');
+                            k++;
+                        }
                     }
 
                 }
@@ -249,7 +256,7 @@ module.exports = class DealCards extends deckofcards {
         var str = '';
         var p_winners = new Array(5);
         PotDistribution[highestHandindex];
-        module.exports.highestHandindex = highestHandindex + 1;
+        module.exports.highestHandindex = highestHandindex+1;
 
         if (isPotSplit) {
             splitPotWinner[k + 1] = highestHandindex;
@@ -259,11 +266,41 @@ module.exports = class DealCards extends deckofcards {
             }
         }
         else {
-            str = "Winner Player " + (highestHandindex + 1);
+            str = "Winner Player " + (highestHandindex+1);
             console.log(str);
         }
 
     }//SidepotEvaluate
+
+    NextHighestCardEvaluate(i,highestHandindex_l){
+        let nextHighCard = [], currentHighCard = [];
+
+        currentHighCard.push(PlayersHand[highestHandindex_l][0])
+        currentHighCard.push(PlayersHand[highestHandindex_l][1]);
+        currentHighCard.sort(function (a, b) {
+            return a.VALUE - b.VALUE;
+        });
+
+        nextHighCard.push(PlayersHand[i][1]);
+        nextHighCard.sort(function (a, b) {
+            return a.VALUE - b.VALUE;
+        });
+        if(nextHighCard[1] == currentHighCard[1] && nextHighCard[0] == currentHighCard[0])
+            return -1;
+
+        if(nextHighCard[1] > currentHighCard[1]){
+            return i;
+        }else if(nextHighCard[1] == currentHighCard[1])
+        {
+            if(nextHighCard[0] > currentHighCard[0])
+                return i;
+            else
+                return highestHandindex_l;
+        }else{
+            return highestHandindex_l;
+        }
+
+    }
 }
 
 
